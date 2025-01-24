@@ -8,7 +8,10 @@ from bs4 import BeautifulSoup
 import urllib3 as urllib
 import time
 
+#Init
 finalData = []
+pagesSearched = []
+subpagesFound = []
 
 ####################
 ### FOR CRAWLING ###
@@ -35,23 +38,28 @@ def begin(crawlData, toDepth, verbose, delay):
     for subpage in crawlData[1]:
 
         if(verbose):
+            print(str(len(pagesSearched)) + "/" + str(len(subpagesFound)) + " pages indexed")
             print("Current Page: " + subpage)
             print("Current Depth: " + str(depth))
 
         time.sleep(delay) #courteous sleep, set with delay perameter
-        crawlData = loadPage(subpage, depth)
-        if crawlData == -1: #if page not loadable, pass to next page
-            if(verbose):
-                print("  ERR:  " + subpage + " is not a valid URL")
-            pass
+        if(subpage not in pagesSearched):
+            crawlData = loadPage(subpage, depth, toDepth)
+            if crawlData == -1: #if page not loadable, pass to next page
+                if(verbose):
+                    print("  ERR:  " + subpage + " is not a valid URL")
+                pass
+            else:
+                finalData.append([crawlData[0], crawlData[2]]) #append [tokens, page] to final data
+                if(depth < toDepth): #if depth is not reached, run next set of subpages
+                    begin(crawlData, toDepth, verbose, delay)
         else:
-            finalData.append([crawlData[0], crawlData[2]]) #append [tokens, page] to final data
-            if(depth < toDepth): #if depth is not reached, run next set of subpages
-                begin(crawlData, toDepth, verbose, delay)
+            print("  " + subpage + " already indexed")
+            pass
 
 #loads page html
 #returns [tokens, subpages, rootpage, depth+1]
-def loadPage(page, depth):
+def loadPage(page, depth, toDepth):
     #Headers
     hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -65,13 +73,14 @@ def loadPage(page, depth):
     except:
         return -1
     soup = BeautifulSoup(req.data, features="html.parser")
-    data = indexPage(soup, page) #[tokens, subpages]
+    pagesSearched.append(page);
+    data = indexPage(soup, page, depth, toDepth) #[tokens, subpages]
     return [data[0],  data[1],   page,   (depth+1)]
            #tokens  | subpages | rootpage | depth + 1
 
 #creates tokens and subpages of given page
 #returns [tokens, subpages]
-def indexPage(soup, page):
+def indexPage(soup, page, depth, toDepth):
     #get only text from web page
     for script in soup(["script", "style"]): #remove script and style tags
         script.extract()
@@ -95,6 +104,8 @@ def indexPage(soup, page):
 
         if "#" not in href: #remove links that contain anchors
             subpages.append(href)
+            if(depth < toDepth):
+                subpagesFound.append(href)
     return [tokens, subpages]
 
 #####################
